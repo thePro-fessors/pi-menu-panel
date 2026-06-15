@@ -5,9 +5,7 @@ set -e
 # Compile using standard system paths
 mkdir -p ".build/release"
 
-clang -c -fobjc-arc -O Sources/MacbookSibal/SafeNSEvent.m -o .build/SafeNSEvent.o
-
-swiftc -swift-version 5 -module-cache-path .build/module-cache -import-objc-header Sources/MacbookSibal/SafeNSEvent.h Sources/MacbookSibal/*.swift .build/SafeNSEvent.o -o ".build/release/MacbookSibal"
+swiftc -swift-version 5 -module-cache-path .build/module-cache Sources/MacbookSibal/*.swift -o ".build/release/MacbookSibal"
 echo "Creating App Bundle..."
 APP_DIR="PieMenu.app"
 CONTENTS_DIR="${APP_DIR}/Contents"

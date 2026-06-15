@@ -23,8 +23,10 @@ public class PieMenuPanel: NSPanel {
     private var initialLocation: NSPoint = .zero
     
     private init() {
+        let r = ConfigManager.shared.config.menuRadius
+        let size = r * 2 + 50
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: size, height: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -35,27 +37,39 @@ public class PieMenuPanel: NSPanel {
         self.hasShadow = false
         self.level = .statusBar
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.ignoresMouseEvents = true // Pass mouse events through to background since EventTap handles it
+        self.ignoresMouseEvents = false // Allow mouse events, though global monitors also handle interaction
         
         let container = PieMenuContainerView(viewModel: viewModel)
         self.contentView = NSHostingView(rootView: container)
         
         setupCallbacks()
+        
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("ConfigUpdated"), object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateSize()
+            }
+        }
+    }
+    
+    private func updateSize() {
+        let r = ConfigManager.shared.config.menuRadius
+        let size = r * 2 + 50
+        self.setContentSize(NSSize(width: size, height: size))
     }
     
     private func setupCallbacks() {
         let tapManager = EventTapManager.shared
         
-        tapManager.onForceClick = { [weak self] location in
+        tapManager.onMenuTrigger = { [weak self] location in
             self?.showMenu(at: location)
         }
         
-        tapManager.onMouseDragged = { [weak self] location in
-            self?.dragMenu(at: location)
+        tapManager.onMouseMoved = { [weak self] location in
+            self?.hoverMenu(at: location)
         }
         
-        tapManager.onMouseUp = { [weak self] in
-            self?.releaseMenu()
+        tapManager.onMouseClick = { [weak self] location in
+            self?.executeOrCancel(at: location)
         }
     }
     
@@ -64,8 +78,10 @@ public class PieMenuPanel: NSPanel {
         self.viewModel.mouseOffset = .zero
         
         // Position panel center at click location
-        let originX = location.x - 200
-        let originY = location.y - 200
+        let r = ConfigManager.shared.config.menuRadius
+        let size = r * 2 + 50
+        let originX = location.x - size / 2
+        let originY = location.y - size / 2
         self.setFrameOrigin(NSPoint(x: originX, y: originY))
         
         self.alphaValue = 0.0
@@ -78,14 +94,33 @@ public class PieMenuPanel: NSPanel {
         }
     }
     
-    private func dragMenu(at location: NSPoint) {
+    private func hoverMenu(at location: NSPoint) {
         let dx = location.x - initialLocation.x
         let dy = location.y - initialLocation.y
         self.viewModel.mouseOffset = NSSize(width: dx, height: dy)
     }
     
-    private func releaseMenu() {
-        executeSelectedCommand()
+    private func executeOrCancel(at location: NSPoint) {
+        let dx = location.x - initialLocation.x
+        let dy = location.y - initialLocation.y
+        let distance = sqrt(dx*dx + dy*dy)
+        
+        let r = ConfigManager.shared.config.menuRadius
+        let cancelRadius = r * 0.28125
+        
+        if distance >= cancelRadius {
+            releaseMenu(execute: true)
+        } else {
+            releaseMenu(execute: false)
+        }
+    }
+    
+    public func releaseMenu(execute: Bool) {
+        if execute {
+            executeSelectedCommand()
+        } else {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
         
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -94,7 +129,6 @@ public class PieMenuPanel: NSPanel {
         } completionHandler: {
             Task { @MainActor in
                 self.orderOut(nil)
-                // Restore tap manager state
                 EventTapManager.shared.isMenuOpen = false
             }
         }
@@ -108,8 +142,10 @@ public class PieMenuPanel: NSPanel {
         let sectors = ConfigManager.shared.config.sectors
         let N = sectors.count
         
-        // Minimum active radius matches cancelRadius in PieMenuView (45)
-        if distance >= 45 && N > 0 {
+        let r = ConfigManager.shared.config.menuRadius
+        let cancelRadius = r * 0.28125
+        
+        if distance >= cancelRadius && N > 0 {
             let angle = atan2(dy, dx)
             var degrees = angle * 180.0 / .pi
             if degrees < 0 {
@@ -127,14 +163,8 @@ public class PieMenuPanel: NSPanel {
             
             let selectedSector = sectors[index]
             
-            // Perform distinct success haptic feedback
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-            
-            // Run the configured command
             CommandRunner.run(selectedSector.command)
-        } else {
-            // Cancel feedback
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
     }
 }

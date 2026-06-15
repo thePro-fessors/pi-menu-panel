@@ -1,6 +1,4 @@
 import Cocoa
-import CoreGraphics
-import ApplicationServices
 
 @MainActor
 public class EventTapManager: ObservableObject {
@@ -10,20 +8,17 @@ public class EventTapManager: ObservableObject {
     @Published public var isMonitoring = false
     @Published public var isMenuOpen = false
     
-    public var initialLocation: NSPoint = .zero
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private var hasTriggeredForCurrentClick = false
+    private var globalFlagsMonitor: Any?
+    private var localFlagsMonitor: Any?
+    private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
     
-    // State variables for Long Press fallback (꾹 누르기 감지)
-    private var isMouseDown = false
-    private var mouseDownTime = Date()
-    private let longPressThreshold: TimeInterval = 0.45
-    private let dragCancelDistance: CGFloat = 35.0
+    private var lastOptionPressTime: Date?
+    private let doubleTapThreshold: TimeInterval = 0.3
     
-    public var onForceClick: ((NSPoint) -> Void)?
-    public var onMouseDragged: ((NSPoint) -> Void)?
-    public var onMouseUp: (() -> Void)?
+    public var onMenuTrigger: ((NSPoint) -> Void)?
+    public var onMouseMoved: ((NSPoint) -> Void)?
+    public var onMouseClick: ((NSPoint) -> Void)?
     
     private init() {
         checkPermission()
@@ -48,182 +43,99 @@ public class EventTapManager: ObservableObject {
             return
         }
         
-        let eventMask: UInt64 = (1 << CGEventType.leftMouseDown.rawValue) |
-                        (1 << CGEventType.leftMouseDragged.rawValue) |
-                        (1 << CGEventType.leftMouseUp.rawValue) |
-                        (1 << 29) // 29 is the rawValue for NSEvent.EventType.pressure
+        // Monitor for Option key double tap
+        let handler: (NSEvent) -> Void = { [weak self] event in
+            self?.handleFlagsChanged(event)
+        }
         
-        let selfPointer = Unmanaged.passUnretained(self).toOpaque()
+        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: handler)
+        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            handler(event)
+            return event
+        }
         
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else {
-                    return Unmanaged.passRetained(event)
+        // Monitor for mouse down to close/execute menu, mouse moved for hover, and ESC to cancel
+        let mouseHandler: (NSEvent) -> Void = { [weak self] event in
+            guard let self = self else { return }
+            if self.isMenuOpen {
+                if event.type == .keyDown {
+                    if event.keyCode == 53 { // ESC key
+                        DispatchQueue.main.async { [weak self] in
+                            self?.isMenuOpen = false
+                            PieMenuPanel.shared.releaseMenu(execute: false)
+                        }
+                    }
+                    return
                 }
                 
-                return MainActor.assumeIsolated {
-                    let manager = Unmanaged<EventTapManager>.fromOpaque(refcon).takeUnretainedValue()
-                    return manager.handleEvent(proxy: proxy, type: type, event: event)
+                let location = NSEvent.mouseLocation
+                if event.type == .mouseMoved {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onMouseMoved?(location)
+                    }
+                } else if event.type == .leftMouseDown {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onMouseClick?(location)
+                    }
                 }
-            },
-            userInfo: selfPointer
-        ) else {
-            print("Failed to create event tap.")
-            return
+            }
         }
         
-        self.eventTap = tap
-        self.runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        
-        if let source = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: true)
-            self.isMonitoring = true
-            print("Global event tap started monitoring.")
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown], handler: mouseHandler)
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown]) { event in
+            mouseHandler(event)
+            // Consume ESC event locally to prevent system beep if PieMenu is active
+            if event.type == .keyDown && event.keyCode == 53 && self.isMenuOpen {
+                return nil
+            }
+            return event
         }
+        
+        self.isMonitoring = true
+        print("Input monitor started (Option Double-Tap mode).")
     }
     
     public func stopMonitoring() {
-        guard isMonitoring, let tap = eventTap, let source = runLoopSource else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
-        self.eventTap = nil
-        self.runLoopSource = nil
+        guard isMonitoring else { return }
+        if let gm = globalFlagsMonitor { NSEvent.removeMonitor(gm) }
+        if let lm = localFlagsMonitor { NSEvent.removeMonitor(lm) }
+        if let gmm = globalMouseMonitor { NSEvent.removeMonitor(gmm) }
+        if let lmm = localMouseMonitor { NSEvent.removeMonitor(lmm) }
+        
+        globalFlagsMonitor = nil
+        localFlagsMonitor = nil
+        globalMouseMonitor = nil
+        localMouseMonitor = nil
+        
         self.isMonitoring = false
-        print("Global event tap stopped monitoring.")
+        print("Input monitor stopped.")
     }
     
-    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // Safe debug logging using CGEvent C-API to prevent AppKit stage/pressure exception crashes
-        let typeRaw = type.rawValue
-        let subtype = event.getIntegerValueField(.mouseEventSubtype)
-        let pressure = event.getDoubleValueField(.mouseEventPressure)
-        print("[EventTap] Intercepted event type=\(typeRaw), subtype=\(subtype), pressure=\(String(format: "%.2f", pressure))")
-        
-        // If the menu is open, handle dragging and mouse up, and consume events
-        if isMenuOpen {
-            if type == .leftMouseDragged {
-                let location = NSEvent.mouseLocation
-                DispatchQueue.main.async { [weak self] in
-                    self?.onMouseDragged?(location)
-                }
-                return nil // Consume event
-            } else if type == .leftMouseUp {
-                DispatchQueue.main.async { [weak self] in
-                    self?.onMouseUp?()
-                }
-                isMouseDown = false
-                hasTriggeredForCurrentClick = false
-                return nil // Consume event
-            }
-        }
-        
-        // standard trigger logic
-        if type == .leftMouseDown {
-            if isMenuOpen {
-                print("[EventTap] 메뉴가 열린 상태에서 새로운 클릭(MouseDown) 감지. 마우스 먹통 방지를 위해 메뉴 상태 강제 초기화.")
-                isMenuOpen = false
-                isMouseDown = false
-                hasTriggeredForCurrentClick = false
-                DispatchQueue.main.async {
-                    PieMenuPanel.shared.alphaValue = 0.0
-                    PieMenuPanel.shared.orderOut(nil)
-                }
-            }
-            
-            hasTriggeredForCurrentClick = false
-            isMouseDown = true
-            let clickTime = Date()
-            mouseDownTime = clickTime
-            let location = NSEvent.mouseLocation
-            initialLocation = location
-            
-            let enableFallback = ConfigManager.shared.config.enableLongPressFallback
-            print("[EventTap] Left mouse down at \(location). (롱프레스 예비 감지: \(enableFallback))")
-            
-            if enableFallback {
-                // Start Long Press fallback timer
-                DispatchQueue.main.asyncAfter(deadline: .now() + longPressThreshold) { [weak self] in
-                    guard let self = self else { return }
-                    if self.isMouseDown && self.mouseDownTime == clickTime && !self.isMenuOpen && !self.hasTriggeredForCurrentClick {
-                        print("[EventTap] 꾹 누르기(Long-press) 시간 초과 조건 충족 (물리 압력 미지원 기기용). 메뉴 표시 시작.")
-                        self.hasTriggeredForCurrentClick = true
-                        self.isMenuOpen = true
-                        
-                        self.postFakeMouseUp(at: self.initialLocation)
-                        
-                        // Trigger haptic feedback
+    private func handleFlagsChanged(_ event: NSEvent) {
+        // Only care about when the Option key is PRESSED (added to flags), not released
+        // When Option is pressed alone, the flags contain .option
+        if event.modifierFlags.contains(.option) {
+            let now = Date()
+            if let last = lastOptionPressTime {
+                let diff = now.timeIntervalSince(last)
+                if diff < doubleTapThreshold {
+                    // Double tap detected!
+                    lastOptionPressTime = nil // Reset
+                    
+                    if !isMenuOpen {
+                        print("[EventTap] Option Double-Tap detected! Opening menu.")
+                        isMenuOpen = true
+                        let location = NSEvent.mouseLocation
                         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                         
-                        self.onForceClick?(self.initialLocation)
+                        DispatchQueue.main.async { [weak self] in
+                            self?.onMenuTrigger?(location)
+                        }
                     }
+                    return
                 }
             }
-        }
-        
-        if type == .leftMouseUp {
-            print("[EventTap] Left mouse up.")
-            isMouseDown = false
-            hasTriggeredForCurrentClick = false
-        }
-        
-        if type == .leftMouseDragged && isMouseDown && !isMenuOpen {
-            let currentLocation = NSEvent.mouseLocation
-            let dx = currentLocation.x - initialLocation.x
-            let dy = currentLocation.y - initialLocation.y
-            let dist = sqrt(dx*dx + dy*dy)
-            
-            let enableFallback = ConfigManager.shared.config.enableLongPressFallback
-            
-            if enableFallback && dist > dragCancelDistance {
-                print("[EventTap] 꾹 누르기 취소됨. 너무 많이 움직임: \(String(format: "%.1f", dist))px")
-                isMouseDown = false
-            }
-        }
-        
-        // 4. Force Click 감지 (트랙패드 전용)
-        if !hasTriggeredForCurrentClick && !isMenuOpen && isMouseDown {
-            if let nsEvent = NSEvent(cgEvent: event) {
-                let stageValue = SafeNSEvent.safeStage(for: nsEvent)
-                
-                // Force Click은 stage가 2가 됨
-                if stageValue == 2 {
-                    print("[EventTap] 물리 압력(Force Click) 임계값 도달 (Stage: 2). 즉시 메뉴 표시 시작.")
-                    hasTriggeredForCurrentClick = true
-                    isMouseDown = false
-                    let location = NSEvent.mouseLocation
-                    self.initialLocation = location
-                    self.isMenuOpen = true
-                    
-                    self.postFakeMouseUp(at: location)
-                    
-                    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-                    
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onForceClick?(location)
-                    }
-                    
-                    return nil // Consume event
-                }
-            }
-        }
-        
-        return Unmanaged.passRetained(event)
-    }
-    
-    private func postFakeMouseUp(at location: NSPoint) {
-        // CoreGraphics uses top-left origin, NSEvent uses bottom-left origin
-        // But for CGEvent post, if we use the same CGEvent source it might be easier.
-        // Actually, let's just use CGEvent mouse location
-        guard let currentEvent = CGEvent(source: nil) else { return }
-        let cgLocation = currentEvent.location
-        if let fakeUp = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: cgLocation, mouseButton: .left) {
-            fakeUp.post(tap: .cghidEventTap)
-            print("[EventTap] 🖱️ Posted fake leftMouseUp to release system mouse lock")
+            lastOptionPressTime = now
         }
     }
 }

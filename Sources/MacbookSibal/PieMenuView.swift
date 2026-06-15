@@ -48,9 +48,11 @@ public struct PieMenuView: View {
     
     @State private var hoveredSectorIndex: Int? = nil
     
-    private let innerRadius: CGFloat = 55
-    private let outerRadius: CGFloat = 160
-    private let cancelRadius: CGFloat = 45
+    private var outerRadius: CGFloat { configManager.config.menuRadius }
+    private var innerRadius: CGFloat { outerRadius * 0.34375 } // proportional to 55/160
+    private var cancelRadius: CGFloat { outerRadius * 0.28125 } // proportional to 45/160
+    
+    private var themeColor: Color { Color(hex: configManager.config.themeColorHex) }
     
     public init(mouseOffset: NSSize) {
         self.mouseOffset = mouseOffset
@@ -97,7 +99,7 @@ public struct PieMenuView: View {
                             isHovered
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [Color.indigo, Color.purple.opacity(0.8)],
+                                    colors: [themeColor.opacity(0.8), themeColor],
                                     startPoint: .center,
                                     endPoint: .topLeading
                                 )
@@ -115,13 +117,13 @@ public struct PieMenuView: View {
                             )
                             .stroke(
                                 isHovered
-                                ? Color.purple.opacity(0.6)
+                                ? themeColor.opacity(0.6)
                                 : Color.white.opacity(0.15),
                                 lineWidth: 1.5
                             )
                         )
                         .shadow(
-                            color: isHovered ? Color.purple.opacity(0.4) : Color.clear,
+                            color: isHovered ? themeColor.opacity(0.4) : Color.clear,
                             radius: 10,
                             x: 0,
                             y: 0
@@ -186,7 +188,7 @@ public struct PieMenuView: View {
                 updateSelection()
             }
         }
-        .frame(width: 400, height: 400)
+        .frame(width: outerRadius * 2 + 50, height: outerRadius * 2 + 50)
     }
     
     private func updateSelection() {

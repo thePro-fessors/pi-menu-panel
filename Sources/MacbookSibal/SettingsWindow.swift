@@ -1,24 +1,86 @@
 import SwiftUI
 import Cocoa
 
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (1, 1, 1, 0)
+        }
+
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+    
+    func toHex() -> String {
+        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else { return "#800080" }
+        let r = Int(nsColor.redComponent * 255)
+        let g = Int(nsColor.greenComponent * 255)
+        let b = Int(nsColor.blueComponent * 255)
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var configManager = ConfigManager.shared
     @State private var sectors: [SectorConfig] = []
+    @State private var menuRadius: CGFloat = 160.0
+    @State private var themeColor: Color = Color(hex: "#800080")
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 4) {
-                Text("Pie Menu Command Settings")
+                Text("Pie Menu Settings")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                Text("Customize the sectors of your circular menu. Re-order, add, or edit commands.")
+                Text("Customize the sectors, size, and color of your circular menu.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.windowBackgroundColor))
+            
+            Divider()
+            
+            // Appearance Settings
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Appearance")
+                    .font(.system(size: 12, weight: .bold))
+                
+                HStack {
+                    Text("Menu Radius: \(Int(menuRadius))px")
+                        .font(.system(size: 12))
+                        .frame(width: 130, alignment: .leading)
+                    Slider(value: $menuRadius, in: 100...300, step: 10)
+                }
+                
+                HStack {
+                    Text("Theme Color")
+                        .font(.system(size: 12))
+                        .frame(width: 130, alignment: .leading)
+                    ColorPicker("", selection: $themeColor)
+                        .labelsHidden()
+                }
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
             
             Divider()
             
@@ -85,9 +147,11 @@ struct SettingsView: View {
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 450, height: 420)
+        .frame(width: 450, height: 500)
         .onAppear {
             self.sectors = configManager.config.sectors
+            self.menuRadius = configManager.config.menuRadius
+            self.themeColor = Color(hex: configManager.config.themeColorHex)
         }
     }
     
@@ -114,14 +178,24 @@ struct SettingsView: View {
             SectorConfig(id: 6, name: "Activity Monitor", command: "open -a 'Activity Monitor'")
         ]
         self.sectors = defaultSectors
+        self.menuRadius = 160.0
+        self.themeColor = Color(hex: "#800080")
     }
     
     private func saveChanges() {
         configManager.config.sectors = sectors
+        configManager.config.menuRadius = menuRadius
+        configManager.config.themeColorHex = themeColor.toHex()
         configManager.saveConfig()
+        
+        // Broadcast configuration change so PieMenuPanel can update its size if needed
+        NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
+        
         NSSound.beep()
+        SettingsWindowController.shared.close()
     }
 }
+
 
 @MainActor
 public class SettingsWindowController {
@@ -162,6 +236,10 @@ public class SettingsWindowController {
         self.window = newWindow
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    public func close() {
+        window?.close()
     }
     
     private class WindowDelegate: NSObject, NSWindowDelegate {

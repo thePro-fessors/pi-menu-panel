@@ -31,7 +31,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Pie Menu Started"
-            alert.informativeText = "Pie Menu is now running in the background. You can access it via the menu bar icon (🎛️) or by Force Clicking on your trackpad."
+            alert.informativeText = "Pie Menu is now running in the background. You can access it via the menu bar icon (🎛️) or by double-tapping the Option (⌥) key."
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             
@@ -40,6 +40,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             
             alert.runModal()
         }
+    }
+    
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
     }
     
     private func setupStatusItem() {
@@ -60,11 +64,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(title: "Edit Commands...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
-        
-        let fallbackItem = NSMenuItem(title: "Use 0.45s Long Press Fallback", action: #selector(toggleLongPressFallback), keyEquivalent: "")
-        fallbackItem.target = self
-        fallbackItem.state = ConfigManager.shared.config.enableLongPressFallback ? .on : .off
-        menu.addItem(fallbackItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -90,7 +89,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         if tapManager.isPermissionGranted {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Granted"
-            alert.informativeText = "Pie Menu is successfully monitoring Force Click events globally."
+            alert.informativeText = "Pie Menu is successfully monitoring Option key events globally."
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()
@@ -98,7 +97,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Pie Menu requires Accessibility permission to monitor Force Click events system-wide. Please enable it in System Settings."
+            alert.informativeText = "Pie Menu requires Accessibility permission to monitor keyboard events system-wide. Please enable it in System Settings."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Open System Settings")
             alert.addButton(withTitle: "Cancel")
@@ -108,15 +107,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 tapManager.requestPermission()
             }
         }
-    }
-    
-    @objc private func toggleLongPressFallback(_ sender: NSMenuItem) {
-        let newValue = !ConfigManager.shared.config.enableLongPressFallback
-        ConfigManager.shared.config.enableLongPressFallback = newValue
-        ConfigManager.shared.saveConfig()
-        
-        sender.state = newValue ? .on : .off
-        print("[AppDelegate] Long press fallback option updated to: \(newValue)")
     }
     
     @objc private func quitApp() {

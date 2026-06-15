@@ -14,22 +14,26 @@ public struct SectorConfig: Codable, Identifiable {
 
 public struct AppConfig: Codable {
     public var sectors: [SectorConfig]
-    public var enableLongPressFallback: Bool
+    public var menuRadius: CGFloat
+    public var themeColorHex: String
     
-    public init(sectors: [SectorConfig], enableLongPressFallback: Bool = true) {
+    public init(sectors: [SectorConfig], menuRadius: CGFloat = 160.0, themeColorHex: String = "#800080") {
         self.sectors = sectors
-        self.enableLongPressFallback = enableLongPressFallback
+        self.menuRadius = menuRadius
+        self.themeColorHex = themeColorHex
     }
     
     enum CodingKeys: String, CodingKey {
         case sectors
-        case enableLongPressFallback
+        case menuRadius
+        case themeColorHex
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.sectors = try container.decode([SectorConfig].self, forKey: .sectors)
-        self.enableLongPressFallback = try container.decodeIfPresent(Bool.self, forKey: .enableLongPressFallback) ?? true
+        self.menuRadius = try container.decodeIfPresent(CGFloat.self, forKey: .menuRadius) ?? 160.0
+        self.themeColorHex = try container.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "#800080"
     }
 }
 
@@ -62,7 +66,7 @@ public class ConfigManager: ObservableObject {
                 SectorConfig(id: 5, name: "Browser", command: "open https://google.com"),
                 SectorConfig(id: 6, name: "Activity Monitor", command: "open -a 'Activity Monitor'")
             ]
-            self.config = AppConfig(sectors: defaultSectors, enableLongPressFallback: true)
+            self.config = AppConfig(sectors: defaultSectors)
             saveConfig()
         } else {
             do {
@@ -79,7 +83,7 @@ public class ConfigManager: ObservableObject {
                     SectorConfig(id: 5, name: "Browser", command: "open https://google.com"),
                     SectorConfig(id: 6, name: "Activity Monitor", command: "open -a 'Activity Monitor'")
                 ]
-                self.config = AppConfig(sectors: defaultSectors, enableLongPressFallback: true)
+                self.config = AppConfig(sectors: defaultSectors)
             }
         }
     }
