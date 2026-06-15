@@ -222,12 +222,11 @@ public class SettingsWindowController {
         )
         newWindow.title = "Pie Menu Settings"
         newWindow.contentView = NSHostingView(rootView: contentView)
+        newWindow.isReleasedWhenClosed = false
         newWindow.center()
         
-        // Custom window delegate to release window on close
-        let delegate = WindowDelegate { [weak self] in
-            self?.window = nil
-        }
+        // Custom window delegate to prevent close, instead hiding the window
+        let delegate = WindowDelegate()
         newWindow.delegate = delegate
         
         // Retain delegate via window property
@@ -239,18 +238,13 @@ public class SettingsWindowController {
     }
     
     public func close() {
-        window?.close()
+        window?.orderOut(nil)
     }
     
     private class WindowDelegate: NSObject, NSWindowDelegate {
-        let onClose: () -> Void
-        
-        init(onClose: @escaping () -> Void) {
-            self.onClose = onClose
-        }
-        
-        func windowWillClose(_ notification: Notification) {
-            onClose()
+        func windowShouldClose(_ sender: NSWindow) -> Bool {
+            sender.orderOut(nil)
+            return false
         }
     }
 }
