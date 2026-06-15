@@ -23,7 +23,7 @@ public class PieMenuPanel: NSPanel {
     private var initialLocation: NSPoint = .zero
     
     private init() {
-        let r = ConfigManager.shared.config.menuRadius
+        let r = ConfigManager.shared.activeProfile.menuRadius
         let size = r * 2 + 50
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: size, height: size),
@@ -52,7 +52,7 @@ public class PieMenuPanel: NSPanel {
     }
     
     private func updateSize() {
-        let r = ConfigManager.shared.config.menuRadius
+        let r = ConfigManager.shared.activeProfile.menuRadius
         let size = r * 2 + 50
         self.setContentSize(NSSize(width: size, height: size))
     }
@@ -78,7 +78,7 @@ public class PieMenuPanel: NSPanel {
         self.viewModel.mouseOffset = .zero
         
         // Position panel center at click location
-        let r = ConfigManager.shared.config.menuRadius
+        let r = ConfigManager.shared.activeProfile.menuRadius
         let size = r * 2 + 50
         let originX = location.x - size / 2
         let originY = location.y - size / 2
@@ -105,7 +105,7 @@ public class PieMenuPanel: NSPanel {
         let dy = location.y - initialLocation.y
         let distance = sqrt(dx*dx + dy*dy)
         
-        let r = ConfigManager.shared.config.menuRadius
+        let r = ConfigManager.shared.activeProfile.menuRadius
         let cancelRadius = r * 0.28125
         
         if distance >= cancelRadius {
@@ -139,10 +139,10 @@ public class PieMenuPanel: NSPanel {
         let dy = viewModel.mouseOffset.height
         let distance = sqrt(dx*dx + dy*dy)
         
-        let sectors = ConfigManager.shared.config.sectors
+        let sectors = ConfigManager.shared.activeProfile.sectors
         let N = sectors.count
         
-        let r = ConfigManager.shared.config.menuRadius
+        let r = ConfigManager.shared.activeProfile.menuRadius
         let cancelRadius = r * 0.28125
         
         if distance >= cancelRadius && N > 0 {

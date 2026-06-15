@@ -41,6 +41,7 @@ struct SettingsView: View {
     @State private var sectors: [SectorConfig] = []
     @State private var menuRadius: CGFloat = 160.0
     @State private var themeColor: Color = Color(hex: "#800080")
+    @State private var activeProfileName: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
@@ -124,6 +125,63 @@ struct SettingsView: View {
             
             Divider()
             
+            // Profile switcher bar
+            HStack(spacing: 12) {
+                Button(action: {
+                    switchToPreviousProfile()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                
+                TextField("Profile Name", text: $activeProfileName)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .frame(width: 150)
+                
+                Button(action: {
+                    switchToNextProfile()
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button(action: {
+                    createNewProfile()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle")
+                        Text("New")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                
+                if configManager.config.profiles.count > 1 {
+                    Button(action: {
+                        deleteActiveProfile()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "minus.circle")
+                            Text("Delete")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.red)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.windowBackgroundColor))
+            
+            Divider()
+            
             // Footer buttons
             HStack(spacing: 12) {
                 Button("Add Sector") {
@@ -147,12 +205,51 @@ struct SettingsView: View {
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 450, height: 500)
+        .frame(width: 450, height: 540)
         .onAppear {
-            self.sectors = configManager.config.sectors
-            self.menuRadius = configManager.config.menuRadius
-            self.themeColor = Color(hex: configManager.config.themeColorHex)
+            // Reload configuration from disk to discard unsaved transitions
+            configManager.loadConfig()
+            loadProfile(configManager.activeProfile)
         }
+    }
+    
+    private func loadProfile(_ profile: ProfileConfig) {
+        self.sectors = profile.sectors
+        self.menuRadius = profile.menuRadius
+        self.themeColor = Color(hex: profile.themeColorHex)
+        self.activeProfileName = profile.name
+    }
+    
+    private func backupCurrentProfileState() {
+        var profile = configManager.activeProfile
+        profile.name = activeProfileName
+        profile.sectors = sectors
+        profile.menuRadius = menuRadius
+        profile.themeColorHex = themeColor.toHex()
+        configManager.updateActiveProfileWithoutSaving(profile)
+    }
+    
+    private func switchToPreviousProfile() {
+        backupCurrentProfileState()
+        configManager.switchToPreviousProfile()
+        loadProfile(configManager.activeProfile)
+    }
+    
+    private func switchToNextProfile() {
+        backupCurrentProfileState()
+        configManager.switchToNextProfile()
+        loadProfile(configManager.activeProfile)
+    }
+    
+    private func createNewProfile() {
+        backupCurrentProfileState()
+        configManager.createNewProfile()
+        loadProfile(configManager.activeProfile)
+    }
+    
+    private func deleteActiveProfile() {
+        configManager.deleteActiveProfile()
+        loadProfile(configManager.activeProfile)
     }
     
     private func addSector() {
@@ -183,10 +280,12 @@ struct SettingsView: View {
     }
     
     private func saveChanges() {
-        configManager.config.sectors = sectors
-        configManager.config.menuRadius = menuRadius
-        configManager.config.themeColorHex = themeColor.toHex()
-        configManager.saveConfig()
+        var profile = configManager.activeProfile
+        profile.name = activeProfileName
+        profile.sectors = sectors
+        profile.menuRadius = menuRadius
+        profile.themeColorHex = themeColor.toHex()
+        configManager.updateActiveProfile(profile)
         
         // Broadcast configuration change so PieMenuPanel can update its size if needed
         NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
@@ -215,7 +314,7 @@ public class SettingsWindowController {
         let contentView = SettingsView()
         
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 460),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

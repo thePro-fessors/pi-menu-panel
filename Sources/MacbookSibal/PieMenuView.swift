@@ -48,11 +48,11 @@ public struct PieMenuView: View {
     
     @State private var hoveredSectorIndex: Int? = nil
     
-    private var outerRadius: CGFloat { configManager.config.menuRadius }
+    private var outerRadius: CGFloat { configManager.activeProfile.menuRadius }
     private var innerRadius: CGFloat { outerRadius * 0.34375 } // proportional to 55/160
     private var cancelRadius: CGFloat { outerRadius * 0.28125 } // proportional to 45/160
     
-    private var themeColor: Color { Color(hex: configManager.config.themeColorHex) }
+    private var themeColor: Color { Color(hex: configManager.activeProfile.themeColorHex) }
     
     public init(mouseOffset: NSSize) {
         self.mouseOffset = mouseOffset
@@ -61,7 +61,7 @@ public struct PieMenuView: View {
     public var body: some View {
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            let sectors = configManager.config.sectors
+            let sectors = configManager.activeProfile.sectors
             let N = sectors.count > 0 ? sectors.count : 1
             let sectorWidth = 360.0 / Double(N)
             
@@ -214,7 +214,7 @@ public struct PieMenuView: View {
             clockDegrees += 360.0
         }
         
-        let sectors = configManager.config.sectors
+        let sectors = configManager.activeProfile.sectors
         let N = sectors.count
         guard N > 0 else {
             setHoveredIndex(nil)
