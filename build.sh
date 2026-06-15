@@ -45,4 +45,7 @@ EOF
 echo "Signing App Bundle..."
 codesign --force --deep --sign - "${APP_DIR}"
 
-echo "Done! PieMenu.app has been created successfully in $(pwd)/${APP_DIR}"
+echo "Create PKG Installer..."
+pkgbuild --component "${APP_DIR}" --install-location "/Applications" "PieMenu.pkg"
+
+echo "Done! PieMenu.app and PieMenu.pkg have been created successfully in $(pwd)"
