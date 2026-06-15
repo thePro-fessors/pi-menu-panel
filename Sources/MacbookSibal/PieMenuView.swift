@@ -48,7 +48,7 @@ public struct PieMenuView: View {
     
     @State private var hoveredSectorIndex: Int? = nil
     
-    private var outerRadius: CGFloat { configManager.activeProfile.menuRadius }
+    private var outerRadius: CGFloat { configManager.config.menuRadius }
     private var innerRadius: CGFloat { outerRadius * 0.34375 } // proportional to 55/160
     private var cancelRadius: CGFloat { outerRadius * 0.28125 } // proportional to 45/160
     

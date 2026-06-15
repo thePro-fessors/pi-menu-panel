@@ -1,5 +1,6 @@
 import SwiftUI
 import Cocoa
+import UniformTypeIdentifiers
 
 extension Color {
     init(hex: String) {
@@ -42,6 +43,7 @@ struct SettingsView: View {
     @State private var menuRadius: CGFloat = 160.0
     @State private var themeColor: Color = Color(hex: "#92a8d1")
     @State private var activeProfileName: String = ""
+    @State private var targetAppBundleId: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
@@ -62,7 +64,7 @@ struct SettingsView: View {
             
             // Appearance Settings
             VStack(alignment: .leading, spacing: 10) {
-                Text("Appearance")
+                Text("Appearance (Shared across profiles)")
                     .font(.system(size: 12, weight: .bold))
                 
                 HStack {
@@ -146,11 +148,29 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 
-                TextField("Profile Name", text: $activeProfileName)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .frame(width: 150)
+                VStack(alignment: .leading, spacing: 3) {
+                    TextField("Profile Name", text: $activeProfileName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 160)
+                    
+                    HStack(spacing: 4) {
+                        TextField("App: e.g., com.apple.Safari", text: $targetAppBundleId)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 9))
+                            .frame(width: 130)
+                        
+                        Button(action: {
+                            selectAppFromApplicationsFolder()
+                        }) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Select app from Applications folder")
+                    }
+                    .frame(width: 160)
+                }
                 
                 Button(action: {
                     switchToNextProfile()
@@ -216,27 +236,51 @@ struct SettingsView: View {
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 450, height: 540)
+        .frame(width: 450, height: 565)
         .onAppear {
             // Reload configuration from disk to discard unsaved transitions
             configManager.loadConfig()
+            self.menuRadius = configManager.config.menuRadius
             loadProfile(configManager.activeProfile)
         }
     }
     
+    private func selectAppFromApplicationsFolder() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Select Application"
+        openPanel.showsResizeIndicator = true
+        openPanel.showsHiddenFiles = false
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.allowedContentTypes = [.application]
+        openPanel.directoryURL = URL(fileURLWithPath: "/Applications")
+        
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                if let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier {
+                    self.targetAppBundleId = bundleId
+                } else {
+                    let name = url.deletingPathExtension().lastPathComponent
+                    self.targetAppBundleId = name
+                }
+            }
+        }
+    }
+
     private func loadProfile(_ profile: ProfileConfig) {
         self.sectors = profile.sectors
-        self.menuRadius = profile.menuRadius
         self.themeColor = Color(hex: profile.themeColorHex)
         self.activeProfileName = profile.name
+        self.targetAppBundleId = profile.targetAppBundleId ?? ""
     }
     
     private func backupCurrentProfileState() {
         var profile = configManager.activeProfile
         profile.name = activeProfileName
         profile.sectors = sectors
-        profile.menuRadius = menuRadius
         profile.themeColorHex = themeColor.toHex()
+        profile.targetAppBundleId = targetAppBundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : targetAppBundleId.trimmingCharacters(in: .whitespacesAndNewlines)
         configManager.updateActiveProfileWithoutSaving(profile)
     }
     
@@ -299,14 +343,18 @@ struct SettingsView: View {
         self.sectors = defaultSectors
         self.menuRadius = 160.0
         self.themeColor = Color(hex: "#92a8d1")
+        self.targetAppBundleId = ""
     }
     
     private func saveChanges() {
+        // Apply global menuRadius setting
+        configManager.config.menuRadius = menuRadius
+        
         var profile = configManager.activeProfile
         profile.name = activeProfileName
         profile.sectors = sectors
-        profile.menuRadius = menuRadius
         profile.themeColorHex = themeColor.toHex()
+        profile.targetAppBundleId = targetAppBundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : targetAppBundleId.trimmingCharacters(in: .whitespacesAndNewlines)
         configManager.updateActiveProfile(profile)
         
         // Broadcast configuration change so PieMenuPanel can update its size if needed
@@ -336,7 +384,7 @@ public class SettingsWindowController {
         let contentView = SettingsView()
         
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 490),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

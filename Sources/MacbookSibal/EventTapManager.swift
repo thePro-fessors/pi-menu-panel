@@ -199,6 +199,14 @@ public class EventTapManager: ObservableObject {
                     
                     if !isMenuOpen {
                         print("[EventTap] Option Double-Tap detected! Opening menu.")
+                        
+                        // Switch active profile based on the current frontmost application
+                        if let frontmostApp = NSWorkspace.shared.frontmostApplication {
+                            let bundleId = frontmostApp.bundleIdentifier
+                            let appName = frontmostApp.localizedName
+                            ConfigManager.shared.switchProfileForApp(bundleId: bundleId, appName: appName)
+                        }
+                        
                         isMenuOpen = true
                         let location = NSEvent.mouseLocation
                         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)

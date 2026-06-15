@@ -39,39 +39,70 @@ public struct ProfileConfig: Codable, Identifiable {
     public var id: UUID
     public var name: String
     public var sectors: [SectorConfig]
-    public var menuRadius: CGFloat
     public var themeColorHex: String
+    public var targetAppBundleId: String?
     
-    public init(id: UUID = UUID(), name: String, sectors: [SectorConfig], menuRadius: CGFloat = 160.0, themeColorHex: String = "#92a8d1") {
+    public init(id: UUID = UUID(), name: String, sectors: [SectorConfig], themeColorHex: String = "#92a8d1", targetAppBundleId: String? = nil) {
         self.id = id
         self.name = name
         self.sectors = sectors
-        self.menuRadius = menuRadius
         self.themeColorHex = themeColorHex
+        self.targetAppBundleId = targetAppBundleId
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case sectors
+        case menuRadius // Kept for backward compatibility parsing
+        case themeColorHex
+        case targetAppBundleId
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.sectors = try container.decode([SectorConfig].self, forKey: .sectors)
+        self.themeColorHex = try container.decode(String.self, forKey: .themeColorHex)
+        self.targetAppBundleId = try container.decodeIfPresent(String.self, forKey: .targetAppBundleId)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(sectors, forKey: .sectors)
+        try container.encode(themeColorHex, forKey: .themeColorHex)
+        try container.encode(targetAppBundleId, forKey: .targetAppBundleId)
     }
 }
 
 public struct AppConfig: Codable {
     public var profiles: [ProfileConfig]
     public var activeProfileId: UUID
+    public var menuRadius: CGFloat
     
-    public init(profiles: [ProfileConfig], activeProfileId: UUID) {
+    public init(profiles: [ProfileConfig], activeProfileId: UUID, menuRadius: CGFloat = 160.0) {
         self.profiles = profiles
         self.activeProfileId = activeProfileId
+        self.menuRadius = menuRadius
     }
     
     enum CodingKeys: String, CodingKey {
         case profiles
         case activeProfileId
+        case menuRadius
         
         // Backward compatibility keys
         case sectors
-        case menuRadius
         case themeColorHex
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        self.menuRadius = try container.decodeIfPresent(CGFloat.self, forKey: .menuRadius) ?? 160.0
         
         if let decodedProfiles = try container.decodeIfPresent([ProfileConfig].self, forKey: .profiles),
            let decodedActiveId = try container.decodeIfPresent(UUID.self, forKey: .activeProfileId) {
@@ -80,10 +111,9 @@ public struct AppConfig: Codable {
         } else {
             // Backward compatibility handling: load old config format
             let sectors = try container.decodeIfPresent([SectorConfig].self, forKey: .sectors) ?? []
-            let menuRadius = try container.decodeIfPresent(CGFloat.self, forKey: .menuRadius) ?? 160.0
             let themeColorHex = try container.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "#92a8d1"
             
-            let defaultProfile = ProfileConfig(name: "Default", sectors: sectors, menuRadius: menuRadius, themeColorHex: themeColorHex)
+            let defaultProfile = ProfileConfig(name: "Default", sectors: sectors, themeColorHex: themeColorHex)
             self.profiles = [defaultProfile]
             self.activeProfileId = defaultProfile.id
         }
@@ -93,6 +123,7 @@ public struct AppConfig: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(profiles, forKey: .profiles)
         try container.encode(activeProfileId, forKey: .activeProfileId)
+        try container.encode(menuRadius, forKey: .menuRadius)
     }
 }
 
@@ -227,6 +258,37 @@ public class ConfigManager: ObservableObject {
         if let index = config.profiles.firstIndex(where: { $0.id == config.activeProfileId }) {
             config.profiles.remove(at: index)
             config.activeProfileId = config.profiles[0].id
+            objectWillChange.send()
+        }
+    }
+    
+    // Automatically switches active profile based on the frontmost app's bundle ID or name
+    public func switchProfileForApp(bundleId: String?, appName: String?) {
+        let cleanBundleId = bundleId?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAppName = appName?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 1. Try matching bundle ID
+        if let bId = cleanBundleId, !bId.isEmpty,
+           let matched = config.profiles.first(where: { $0.targetAppBundleId?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == bId }) {
+            config.activeProfileId = matched.id
+            objectWillChange.send()
+            return
+        }
+        
+        // 2. Try matching app name
+        if let name = cleanAppName, !name.isEmpty,
+           let matched = config.profiles.first(where: { $0.targetAppBundleId?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == name }) {
+            config.activeProfileId = matched.id
+            objectWillChange.send()
+            return
+        }
+        
+        // 3. Fallback to default or first profile
+        if let defaultProfile = config.profiles.first(where: { $0.name.lowercased() == "default" }) {
+            config.activeProfileId = defaultProfile.id
+            objectWillChange.send()
+        } else if let first = config.profiles.first {
+            config.activeProfileId = first.id
             objectWillChange.send()
         }
     }
