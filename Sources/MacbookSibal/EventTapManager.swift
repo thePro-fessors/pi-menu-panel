@@ -34,6 +34,21 @@ public class EventTapManager: ObservableObject {
         self.isPermissionGranted = trusted
     }
     
+    private func getNumberFromKeyCode(_ keyCode: UInt16) -> Int? {
+        switch keyCode {
+        case 18: return 1
+        case 19: return 2
+        case 20: return 3
+        case 21: return 4
+        case 23: return 5
+        case 22: return 6
+        case 26: return 7
+        case 28: return 8
+        case 25: return 9
+        default: return nil
+        }
+    }
+
     public func startMonitoring() {
         guard !isMonitoring else { return }
         checkPermission()
@@ -54,15 +69,65 @@ public class EventTapManager: ObservableObject {
             return event
         }
         
-        // Monitor for mouse down to close/execute menu, mouse moved for hover, and ESC to cancel
+        // Monitor for mouse down to close/execute menu, mouse moved for hover, scroll wheel, and ESC/arrows/numbers to control profiles
         let mouseHandler: (NSEvent) -> Void = { [weak self] event in
             guard let self = self else { return }
             if self.isMenuOpen {
                 if event.type == .keyDown {
-                    if event.keyCode == 53 { // ESC key
+                    let keyCode = event.keyCode
+                    if keyCode == 53 { // ESC key
                         DispatchQueue.main.async { [weak self] in
                             self?.isMenuOpen = false
                             PieMenuPanel.shared.releaseMenu(execute: false)
+                        }
+                        return
+                    }
+                    
+                    // Left Arrow (123) / Right Arrow (124) keys
+                    if keyCode == 123 {
+                        DispatchQueue.main.async {
+                            ConfigManager.shared.switchToPreviousProfile()
+                            NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
+                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                        }
+                        return
+                    } else if keyCode == 124 {
+                        DispatchQueue.main.async {
+                            ConfigManager.shared.switchToNextProfile()
+                            NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
+                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                        }
+                        return
+                    }
+                    
+                    // Number keys 1-9
+                    if let number = self.getNumberFromKeyCode(keyCode) {
+                        DispatchQueue.main.async {
+                            let targetIndex = number - 1
+                            let profiles = ConfigManager.shared.config.profiles
+                            if targetIndex < profiles.count {
+                                ConfigManager.shared.config.activeProfileId = profiles[targetIndex].id
+                                ConfigManager.shared.objectWillChange.send()
+                                NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
+                                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                            }
+                        }
+                        return
+                    }
+                    return
+                }
+                
+                if event.type == .scrollWheel {
+                    let dy = event.deltaY
+                    if abs(dy) > 0.1 {
+                        DispatchQueue.main.async {
+                            if dy > 0 {
+                                ConfigManager.shared.switchToPreviousProfile()
+                            } else {
+                                ConfigManager.shared.switchToNextProfile()
+                            }
+                            NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
+                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                         }
                     }
                     return
@@ -81,12 +146,22 @@ public class EventTapManager: ObservableObject {
             }
         }
         
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown], handler: mouseHandler)
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown]) { event in
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown, .scrollWheel], handler: mouseHandler)
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .keyDown, .scrollWheel]) { event in
             mouseHandler(event)
-            // Consume ESC event locally to prevent system beep if PieMenu is active
-            if event.type == .keyDown && event.keyCode == 53 && self.isMenuOpen {
-                return nil
+            
+            if self.isMenuOpen {
+                // Consume ESC, Arrow keys, Number keys to prevent system beep
+                if event.type == .keyDown {
+                    let keyCode = event.keyCode
+                    if keyCode == 53 || keyCode == 123 || keyCode == 124 || self.getNumberFromKeyCode(keyCode) != nil {
+                        return nil
+                    }
+                }
+                // Consume Scroll wheel events to prevent scrolling background apps
+                if event.type == .scrollWheel {
+                    return nil
+                }
             }
             return event
         }

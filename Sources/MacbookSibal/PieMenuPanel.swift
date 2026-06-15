@@ -164,7 +164,7 @@ public class PieMenuPanel: NSPanel {
             let selectedSector = sectors[index]
             
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-            CommandRunner.run(selectedSector.command)
+            CommandRunner.execute(type: selectedSector.actionType, target: selectedSector.command)
         }
     }
 }

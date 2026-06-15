@@ -28,7 +28,7 @@ extension Color {
     }
     
     func toHex() -> String {
-        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else { return "#800080" }
+        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else { return "#92a8d1" }
         let r = Int(nsColor.redComponent * 255)
         let g = Int(nsColor.greenComponent * 255)
         let b = Int(nsColor.blueComponent * 255)
@@ -40,7 +40,7 @@ struct SettingsView: View {
     @ObservedObject var configManager = ConfigManager.shared
     @State private var sectors: [SectorConfig] = []
     @State private var menuRadius: CGFloat = 160.0
-    @State private var themeColor: Color = Color(hex: "#800080")
+    @State private var themeColor: Color = Color(hex: "#92a8d1")
     @State private var activeProfileName: String = ""
     
     var body: some View {
@@ -96,11 +96,22 @@ struct SettingsView: View {
                                 .frame(width: 18)
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                TextField("Sector Label (e.g., Terminal)", text: $sector.name)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 12, weight: .semibold))
+                                HStack(spacing: 8) {
+                                    TextField("Sector Label", text: $sector.name)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    
+                                    Picker("", selection: $sector.actionType) {
+                                        ForEach(SectorActionType.allCases, id: \.self) { type in
+                                            Text(type.rawValue).tag(type)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 100)
+                                    .font(.system(size: 10))
+                                }
                                 
-                                TextField("Shell Command (e.g., open -a Terminal)", text: $sector.command)
+                                TextField(placeholderText(for: sector.actionType), text: $sector.command)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(size: 10, design: .monospaced))
                             }
@@ -265,18 +276,29 @@ struct SettingsView: View {
         }
     }
     
+    private func placeholderText(for type: SectorActionType) -> String {
+        switch type {
+        case .command:
+            return "Shell Command (e.g., open -a Terminal)"
+        case .openApp:
+            return "App Name or Path (e.g., Safari or /Applications/Safari.app)"
+        case .shortcut:
+            return "Key Shortcut (e.g., Cmd+C, Cmd+Option+Left)"
+        }
+    }
+
     private func resetDefaults() {
         let defaultSectors = [
-            SectorConfig(id: 1, name: "Terminal", command: "open -a Terminal"),
-            SectorConfig(id: 2, name: "VS Code", command: "open -a 'Visual Studio Code' || open -a 'VS Code'"),
-            SectorConfig(id: 3, name: "Finder", command: "open ."),
-            SectorConfig(id: 4, name: "Screenshot", command: "screencapture -i ~/Desktop/screenshot.png"),
-            SectorConfig(id: 5, name: "Browser", command: "open https://google.com"),
-            SectorConfig(id: 6, name: "Activity Monitor", command: "open -a 'Activity Monitor'")
+            SectorConfig(id: 1, name: "Terminal", actionType: .openApp, command: "Terminal"),
+            SectorConfig(id: 2, name: "VS Code", actionType: .command, command: "open -a 'Visual Studio Code' || open -a 'VS Code'"),
+            SectorConfig(id: 3, name: "Finder", actionType: .command, command: "open ."),
+            SectorConfig(id: 4, name: "Screenshot", actionType: .command, command: "screencapture -ic"),
+            SectorConfig(id: 5, name: "Browser", actionType: .command, command: "open https://google.com"),
+            SectorConfig(id: 6, name: "Activity Monitor", actionType: .openApp, command: "Activity Monitor")
         ]
         self.sectors = defaultSectors
         self.menuRadius = 160.0
-        self.themeColor = Color(hex: "#800080")
+        self.themeColor = Color(hex: "#92a8d1")
     }
     
     private func saveChanges() {

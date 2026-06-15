@@ -1,14 +1,37 @@
 import Foundation
 
+public enum SectorActionType: String, Codable, CaseIterable {
+    case command = "Command"
+    case openApp = "Open App"
+    case shortcut = "Shortcut"
+}
+
 public struct SectorConfig: Codable, Identifiable {
     public var id: Int
     public var name: String
+    public var actionType: SectorActionType
     public var command: String
     
-    public init(id: Int, name: String, command: String) {
+    public init(id: Int, name: String, actionType: SectorActionType = .command, command: String) {
         self.id = id
         self.name = name
+        self.actionType = actionType
         self.command = command
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case actionType
+        case command
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(Int.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.actionType = try container.decodeIfPresent(SectorActionType.self, forKey: .actionType) ?? .command
+        self.command = try container.decode(String.self, forKey: .command)
     }
 }
 
@@ -19,7 +42,7 @@ public struct ProfileConfig: Codable, Identifiable {
     public var menuRadius: CGFloat
     public var themeColorHex: String
     
-    public init(id: UUID = UUID(), name: String, sectors: [SectorConfig], menuRadius: CGFloat = 160.0, themeColorHex: String = "#800080") {
+    public init(id: UUID = UUID(), name: String, sectors: [SectorConfig], menuRadius: CGFloat = 160.0, themeColorHex: String = "#92a8d1") {
         self.id = id
         self.name = name
         self.sectors = sectors
@@ -58,7 +81,7 @@ public struct AppConfig: Codable {
             // Backward compatibility handling: load old config format
             let sectors = try container.decodeIfPresent([SectorConfig].self, forKey: .sectors) ?? []
             let menuRadius = try container.decodeIfPresent(CGFloat.self, forKey: .menuRadius) ?? 160.0
-            let themeColorHex = try container.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "#800080"
+            let themeColorHex = try container.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "#92a8d1"
             
             let defaultProfile = ProfileConfig(name: "Default", sectors: sectors, menuRadius: menuRadius, themeColorHex: themeColorHex)
             self.profiles = [defaultProfile]
@@ -115,12 +138,12 @@ public class ConfigManager: ObservableObject {
     public func loadConfig() {
         let path = configURL.path
         let defaultSectors = [
-            SectorConfig(id: 1, name: "Terminal", command: "open -a Terminal"),
-            SectorConfig(id: 2, name: "VS Code", command: "open -a 'Visual Studio Code' || open -a 'VS Code'"),
-            SectorConfig(id: 3, name: "Finder", command: "open ."),
-            SectorConfig(id: 4, name: "Screenshot", command: "screencapture -i ~/Desktop/screenshot.png"),
-            SectorConfig(id: 5, name: "Browser", command: "open https://google.com"),
-            SectorConfig(id: 6, name: "Activity Monitor", command: "open -a 'Activity Monitor'")
+            SectorConfig(id: 1, name: "Terminal", actionType: .openApp, command: "Terminal"),
+            SectorConfig(id: 2, name: "VS Code", actionType: .command, command: "open -a 'Visual Studio Code' || open -a 'VS Code'"),
+            SectorConfig(id: 3, name: "Finder", actionType: .command, command: "open ."),
+            SectorConfig(id: 4, name: "Screenshot", actionType: .command, command: "screencapture -ic"),
+            SectorConfig(id: 5, name: "Browser", actionType: .command, command: "open https://google.com"),
+            SectorConfig(id: 6, name: "Activity Monitor", actionType: .openApp, command: "Activity Monitor")
         ]
         let defaultProfile = ProfileConfig(name: "Default", sectors: defaultSectors)
         
@@ -188,9 +211,9 @@ public class ConfigManager: ObservableObject {
     public func createNewProfile() {
         let count = config.profiles.count
         let defaultSectors = [
-            SectorConfig(id: 1, name: "Terminal", command: "open -a Terminal"),
-            SectorConfig(id: 2, name: "Finder", command: "open ."),
-            SectorConfig(id: 3, name: "Browser", command: "open https://google.com")
+            SectorConfig(id: 1, name: "Terminal", actionType: .openApp, command: "Terminal"),
+            SectorConfig(id: 2, name: "Finder", actionType: .command, command: "open ."),
+            SectorConfig(id: 3, name: "Browser", actionType: .command, command: "open https://google.com")
         ]
         let newProfile = ProfileConfig(name: "Profile \(count + 1)", sectors: defaultSectors)
         config.profiles.append(newProfile)
