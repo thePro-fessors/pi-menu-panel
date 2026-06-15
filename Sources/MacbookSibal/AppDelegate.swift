@@ -1,8 +1,10 @@
 import Cocoa
+import ServiceManagement
 
 @MainActor
-public class AppDelegate: NSObject, NSApplicationDelegate {
+public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
+    private var launchAtLoginItem: NSMenuItem?
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Prevent app from showing in the Dock (agent background app)
@@ -60,10 +62,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let menu = NSMenu()
+        menu.delegate = self
         
         let settingsItem = NSMenuItem(title: "Edit Commands...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        
+        let autoStartItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        autoStartItem.target = self
+        menu.addItem(autoStartItem)
+        self.launchAtLoginItem = autoStartItem
+        updateLaunchAtLoginMenuItemState()
         
         menu.addItem(NSMenuItem.separator())
         
@@ -112,5 +121,38 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quitApp() {
         EventTapManager.shared.stopMonitoring()
         NSApp.terminate(nil)
+    }
+    
+    // MARK: - NSMenuDelegate
+    
+    public func menuWillOpen(_ menu: NSMenu) {
+        updateLaunchAtLoginMenuItemState()
+    }
+    
+    private func updateLaunchAtLoginMenuItemState() {
+        let status = SMAppService.mainApp.status
+        launchAtLoginItem?.state = (status == .enabled) ? .on : .off
+    }
+    
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+                print("Successfully unregistered Launch at Login")
+            } else {
+                try service.register()
+                print("Successfully registered Launch at Login")
+            }
+        } catch {
+            print("Failed to toggle Launch at Login: \(error)")
+            let alert = NSAlert()
+            alert.messageText = "Launch at Login Error"
+            alert.informativeText = "Could not update launch setting: \(error.localizedDescription)"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+        updateLaunchAtLoginMenuItemState()
     }
 }
