@@ -12,6 +12,7 @@ public class EventTapManager: ObservableObject {
     private var localFlagsMonitor: Any?
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
+    private var lastFrontmostAppBundleId: String?
     
     private var lastOptionPressTime: Date?
     private let doubleTapThreshold: TimeInterval = 0.3
@@ -213,7 +214,15 @@ public class EventTapManager: ObservableObject {
                         if let frontmostApp = NSWorkspace.shared.frontmostApplication {
                             let bundleId = frontmostApp.bundleIdentifier
                             let appName = frontmostApp.localizedName
-                            ConfigManager.shared.switchProfileForApp(bundleId: bundleId, appName: appName)
+                            
+                            // Skip auto-switching if the frontmost app is our own app (settings window),
+                            // and only auto-switch when the frontmost app has actually changed.
+                            if let bId = bundleId, bId != "com.satellite.PieMenu" {
+                                if bId != lastFrontmostAppBundleId {
+                                    ConfigManager.shared.switchProfileForApp(bundleId: bId, appName: appName)
+                                    lastFrontmostAppBundleId = bId
+                                }
+                            }
                         }
                         
                         isMenuOpen = true
