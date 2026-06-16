@@ -187,9 +187,17 @@ public class EventTapManager: ObservableObject {
     }
     
     private func handleFlagsChanged(_ event: NSEvent) {
-        // Only care about when the Option key is PRESSED (added to flags), not released
-        // When Option is pressed alone, the flags contain .option
-        if event.modifierFlags.contains(.option) {
+        let cleanFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        
+        // 1. Reset double tap state if any other modifier combination (Cmd, Shift, Ctrl) is pressed
+        if cleanFlags.contains(.command) || cleanFlags.contains(.shift) || cleanFlags.contains(.control) {
+            lastOptionPressTime = nil
+            return
+        }
+        
+        // 2. Only care about when the Option key is PRESSED (added to flags), not released
+        // When Option is pressed exclusively, cleanFlags is exactly .option
+        if cleanFlags == .option {
             let now = Date()
             if let last = lastOptionPressTime {
                 let diff = now.timeIntervalSince(last)
@@ -220,5 +228,6 @@ public class EventTapManager: ObservableObject {
             }
             lastOptionPressTime = now
         }
+        // 3. When Option is released, cleanFlags becomes empty ([]), which we bypass safely without resetting
     }
 }

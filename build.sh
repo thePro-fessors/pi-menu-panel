@@ -43,6 +43,7 @@ EOF
 
 # Apply ad-hoc code signature to the app bundle to prevent Gatekeeper / AMFI "zsh: killed" errors
 echo "Signing App Bundle..."
+xattr -cr "${APP_DIR}"
 codesign --force --deep --sign - "${APP_DIR}"
 
 echo "Create PKG Installer..."
