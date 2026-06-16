@@ -2,6 +2,9 @@
 
 set -e
 
+# Kill running instance of PieMenu if it exists to unlock binary
+killall PieMenu 2>/dev/null || true
+
 # Compile using standard system paths
 mkdir -p ".build/release"
 
@@ -15,6 +18,7 @@ MACOS_DIR="${CONTENTS_DIR}/MacOS"
 mkdir -p "${MACOS_DIR}"
 
 # Copy binary
+rm -f "${MACOS_DIR}/PieMenu"
 cp ".build/release/MacbookSibal" "${MACOS_DIR}/PieMenu"
 
 # Create Info.plist

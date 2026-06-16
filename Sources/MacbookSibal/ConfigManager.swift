@@ -225,6 +225,7 @@ public class ConfigManager: ObservableObject {
             let prevIndex = (index - 1 + config.profiles.count) % config.profiles.count
             config.activeProfileId = config.profiles[prevIndex].id
             objectWillChange.send()
+            saveConfig()
         }
     }
     
@@ -235,6 +236,7 @@ public class ConfigManager: ObservableObject {
             let nextIndex = (index + 1) % config.profiles.count
             config.activeProfileId = config.profiles[nextIndex].id
             objectWillChange.send()
+            saveConfig()
         }
     }
     
@@ -250,6 +252,7 @@ public class ConfigManager: ObservableObject {
         config.profiles.append(newProfile)
         config.activeProfileId = newProfile.id
         objectWillChange.send()
+        saveConfig()
     }
     
     // Deletes the active profile and falls back to the first available profile
@@ -259,6 +262,7 @@ public class ConfigManager: ObservableObject {
             config.profiles.remove(at: index)
             config.activeProfileId = config.profiles[0].id
             objectWillChange.send()
+            saveConfig()
         }
     }
     

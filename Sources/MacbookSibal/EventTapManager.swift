@@ -108,6 +108,7 @@ public class EventTapManager: ObservableObject {
                             if targetIndex < profiles.count {
                                 ConfigManager.shared.config.activeProfileId = profiles[targetIndex].id
                                 ConfigManager.shared.objectWillChange.send()
+                                ConfigManager.shared.saveConfig()
                                 NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
                                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                             }
