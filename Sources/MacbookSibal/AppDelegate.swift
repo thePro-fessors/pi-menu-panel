@@ -32,10 +32,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Show startup notification alert asynchronously AFTER launch completes
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Pie Menu Started"
-            alert.informativeText = "Pie Menu is now running in the background. You can access it via the menu bar icon (🎛️) or by double-tapping the Option (⌥) key."
+            alert.messageText = "Pie Menu 시작됨"
+            alert.informativeText = "Pie Menu가 백그라운드에서 실행 중입니다. 메뉴 바의 과녁(🎯) 아이콘이나 Option(⌥) 키를 두 번 더블 탭하여 원형 메뉴를 호출할 수 있습니다."
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "확인")
             
             // Bring the app to the front so the alert is visible
             NSApp.activate(ignoringOtherApps: true)
@@ -54,21 +54,21 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem?.button else { return }
         
         // Use a built-in symbol that resembles a radial menu
-        if let image = NSImage(systemSymbolName: "circle.circle", accessibilityDescription: "Pie Menu") {
+        if let image = NSImage(systemSymbolName: "target", accessibilityDescription: "Pie Menu") {
             image.isTemplate = true // Auto adapts to light/dark modes
             button.image = image
         } else {
-            button.title = "🎛️"
+            button.title = "☺︎"
         }
         
         let menu = NSMenu()
         menu.delegate = self
         
-        let settingsItem = NSMenuItem(title: "Edit Commands...", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "명령어 편집...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
         
-        let autoStartItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        let autoStartItem = NSMenuItem(title: "로그인 시 자동 실행", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         autoStartItem.target = self
         menu.addItem(autoStartItem)
         self.launchAtLoginItem = autoStartItem
@@ -76,11 +76,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        let permissionItem = NSMenuItem(title: "Check Accessibility Permission...", action: #selector(checkPermission), keyEquivalent: "")
+        let permissionItem = NSMenuItem(title: "손쉬운 사용 권한 확인...", action: #selector(checkPermission), keyEquivalent: "")
         permissionItem.target = self
         menu.addItem(permissionItem)
         
-        let quitItem = NSMenuItem(title: "Quit Pie Menu", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Pie Menu 종료", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         
@@ -97,19 +97,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         if tapManager.isPermissionGranted {
             let alert = NSAlert()
-            alert.messageText = "Accessibility Permission Granted"
-            alert.informativeText = "Pie Menu is successfully monitoring Option key events globally."
+            alert.messageText = "손쉬운 사용 권한 승인됨"
+            alert.informativeText = "Pie Menu가 정상적으로 Option 키 이벤트를 감지하고 있습니다."
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "확인")
             alert.runModal()
             tapManager.startMonitoring()
         } else {
             let alert = NSAlert()
-            alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Pie Menu requires Accessibility permission to monitor keyboard events system-wide. Please enable it in System Settings."
+            alert.messageText = "손쉬운 사용 권한 필요"
+            alert.informativeText = "Pie Menu가 키보드 이벤트를 시스템 전역에서 감지하려면 손쉬운 사용(Accessibility) 권한이 필요합니다. 시스템 설정에서 권한을 부여해 주세요."
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "시스템 설정 열기")
+            alert.addButton(withTitle: "취소")
             
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
@@ -147,10 +147,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             print("Failed to toggle Launch at Login: \(error)")
             let alert = NSAlert()
-            alert.messageText = "Launch at Login Error"
-            alert.informativeText = "Could not update launch setting: \(error.localizedDescription)"
+            alert.messageText = "자동 실행 설정 오류"
+            alert.informativeText = "자동 실행 설정을 업데이트할 수 없습니다: \(error.localizedDescription)"
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "확인")
             alert.runModal()
         }
         updateLaunchAtLoginMenuItemState()

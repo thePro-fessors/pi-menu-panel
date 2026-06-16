@@ -113,7 +113,7 @@ public struct AppConfig: Codable {
             let sectors = try container.decodeIfPresent([SectorConfig].self, forKey: .sectors) ?? []
             let themeColorHex = try container.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "#92a8d1"
             
-            let defaultProfile = ProfileConfig(name: "Default", sectors: sectors, themeColorHex: themeColorHex)
+            let defaultProfile = ProfileConfig(name: "기본 프로필", sectors: sectors, themeColorHex: themeColorHex)
             self.profiles = [defaultProfile]
             self.activeProfileId = defaultProfile.id
         }
@@ -151,7 +151,7 @@ public class ConfigManager: ObservableObject {
                 return first
             }
             // Fallback profile if none exists
-            let defaultProfile = ProfileConfig(name: "Default", sectors: [])
+            let defaultProfile = ProfileConfig(name: "기본 프로필", sectors: [])
             return defaultProfile
         }
         set {
@@ -176,7 +176,7 @@ public class ConfigManager: ObservableObject {
             SectorConfig(id: 5, name: "Browser", actionType: .command, command: "open https://google.com"),
             SectorConfig(id: 6, name: "Activity Monitor", actionType: .openApp, command: "Activity Monitor")
         ]
-        let defaultProfile = ProfileConfig(name: "Default", sectors: defaultSectors)
+        let defaultProfile = ProfileConfig(name: "기본 프로필", sectors: defaultSectors)
         
         if !fileManager.fileExists(atPath: path) {
             self.config = AppConfig(profiles: [defaultProfile], activeProfileId: defaultProfile.id)
@@ -246,7 +246,7 @@ public class ConfigManager: ObservableObject {
             SectorConfig(id: 2, name: "Finder", actionType: .command, command: "open ."),
             SectorConfig(id: 3, name: "Browser", actionType: .command, command: "open https://google.com")
         ]
-        let newProfile = ProfileConfig(name: "Profile \(count + 1)", sectors: defaultSectors)
+        let newProfile = ProfileConfig(name: "프로필 \(count + 1)", sectors: defaultSectors)
         config.profiles.append(newProfile)
         config.activeProfileId = newProfile.id
         objectWillChange.send()
@@ -284,7 +284,7 @@ public class ConfigManager: ObservableObject {
         }
         
         // 3. Fallback to default or first profile
-        if let defaultProfile = config.profiles.first(where: { $0.name.lowercased() == "default" }) {
+        if let defaultProfile = config.profiles.first(where: { $0.name.lowercased() == "default" || $0.name == "기본 프로필" }) {
             config.activeProfileId = defaultProfile.id
             objectWillChange.send()
         } else if let first = config.profiles.first {

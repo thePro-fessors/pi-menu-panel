@@ -44,15 +44,17 @@ struct SettingsView: View {
     @State private var themeColor: Color = Color(hex: "#92a8d1")
     @State private var activeProfileName: String = ""
     @State private var targetAppBundleId: String = ""
+    @State private var recordingSectorId: Int? = nil
+    @State private var localEventMonitor: Any? = nil
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 4) {
-                Text("Pie Menu Settings")
+                Text("Pie Menu 설정")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                Text("Customize the sectors, size, and color of your circular menu.")
+                Text("원형 메뉴의 섹터 구성, 크기 및 테마 색상을 설정합니다.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -64,18 +66,18 @@ struct SettingsView: View {
             
             // Appearance Settings
             VStack(alignment: .leading, spacing: 10) {
-                Text("Appearance (Shared across profiles)")
+                Text("화면 설정 (모든 프로필 공용)")
                     .font(.system(size: 12, weight: .bold))
                 
                 HStack {
-                    Text("Menu Radius: \(Int(menuRadius))px")
+                    Text("메뉴 반경: \(Int(menuRadius))px")
                         .font(.system(size: 12))
                         .frame(width: 130, alignment: .leading)
                     Slider(value: $menuRadius, in: 100...300, step: 10)
                 }
                 
                 HStack {
-                    Text("Theme Color")
+                    Text("테마 색상")
                         .font(.system(size: 12))
                         .frame(width: 130, alignment: .leading)
                     ColorPicker("", selection: $themeColor)
@@ -99,7 +101,7 @@ struct SettingsView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 8) {
-                                    TextField("Sector Label", text: $sector.name)
+                                    TextField("섹터 이름", text: $sector.name)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 12, weight: .semibold))
                                     
@@ -113,9 +115,50 @@ struct SettingsView: View {
                                     .font(.system(size: 10))
                                 }
                                 
-                                TextField(placeholderText(for: sector.actionType), text: $sector.command)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 10, design: .monospaced))
+                                HStack(spacing: 4) {
+                                    if sector.actionType == .shortcut && recordingSectorId == sector.id {
+                                        Text("단축키를 누르세요...")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.blue)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 8)
+                                            .frame(height: 22)
+                                            .background(Color.blue.opacity(0.1))
+                                            .cornerRadius(4)
+                                        
+                                        Button("취소") {
+                                            stopRecordingShortcut()
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.red)
+                                    } else {
+                                        TextField(placeholderText(for: sector.actionType), text: $sector.command)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(size: 10, design: .monospaced))
+                                        
+                                        if sector.actionType == .openApp {
+                                            Button(action: {
+                                                selectAppForSector(sectorId: sector.id)
+                                            }) {
+                                                Image(systemName: "folder")
+                                                    .font(.system(size: 10))
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("응용 프로그램 선택")
+                                        } else if sector.actionType == .shortcut {
+                                            Button(action: {
+                                                startRecordingShortcut(for: sector.id)
+                                            }) {
+                                                Image(systemName: "record.circle")
+                                                    .foregroundColor(.red)
+                                                    .font(.system(size: 10))
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("단축키 입력 감지 시작")
+                                        }
+                                    }
+                                }
                             }
                             
                             Button(action: {
@@ -149,13 +192,13 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 
                 VStack(alignment: .leading, spacing: 3) {
-                    TextField("Profile Name", text: $activeProfileName)
+                    TextField("프로필 이름", text: $activeProfileName)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, weight: .bold))
                         .frame(width: 160)
                     
                     HStack(spacing: 4) {
-                        TextField("App: e.g., com.apple.Safari", text: $targetAppBundleId)
+                        TextField("연결할 앱 번들 ID (예: com.apple.Safari)", text: $targetAppBundleId)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 9))
                             .frame(width: 130)
@@ -167,7 +210,7 @@ struct SettingsView: View {
                                 .font(.system(size: 10))
                         }
                         .buttonStyle(.plain)
-                        .help("Select app from Applications folder")
+                        .help("응용 프로그램 폴더에서 앱 선택")
                     }
                     .frame(width: 160)
                 }
@@ -187,7 +230,7 @@ struct SettingsView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus.circle")
-                        Text("New")
+                        Text("새 프로필")
                     }
                     .font(.system(size: 11, weight: .semibold))
                 }
@@ -199,7 +242,7 @@ struct SettingsView: View {
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "minus.circle")
-                            Text("Delete")
+                            Text("삭제")
                         }
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.red)
@@ -215,20 +258,20 @@ struct SettingsView: View {
             
             // Footer buttons
             HStack(spacing: 12) {
-                Button("Add Sector") {
+                Button("섹터 추가") {
                     addSector()
                 }
                 .buttonStyle(.bordered)
                 
                 Spacer()
                 
-                Button("Reset Defaults") {
+                Button("기본값 초기화") {
                     resetDefaults()
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
                 
-                Button("Apply & Save") {
+                Button("적용 및 저장") {
                     saveChanges()
                 }
                 .buttonStyle(.borderedProminent)
@@ -243,11 +286,14 @@ struct SettingsView: View {
             self.menuRadius = configManager.config.menuRadius
             loadProfile(configManager.activeProfile)
         }
+        .onDisappear {
+            stopRecordingShortcut()
+        }
     }
     
     private func selectAppFromApplicationsFolder() {
         let openPanel = NSOpenPanel()
-        openPanel.title = "Select Application"
+        openPanel.title = "애플리케이션 선택"
         openPanel.showsResizeIndicator = true
         openPanel.showsHiddenFiles = false
         openPanel.canChooseFiles = true
@@ -265,6 +311,93 @@ struct SettingsView: View {
                     self.targetAppBundleId = name
                 }
             }
+        }
+    }
+    
+    private func selectAppForSector(sectorId: Int) {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "애플리케이션 선택"
+        openPanel.showsResizeIndicator = true
+        openPanel.showsHiddenFiles = false
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.allowedContentTypes = [.application]
+        openPanel.directoryURL = URL(fileURLWithPath: "/Applications")
+        
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                let appName = url.deletingPathExtension().lastPathComponent
+                if let index = sectors.firstIndex(where: { $0.id == sectorId }) {
+                    sectors[index].command = appName
+                }
+            }
+        }
+    }
+    
+    private func startRecordingShortcut(for sectorId: Int) {
+        stopRecordingShortcut()
+        
+        self.recordingSectorId = sectorId
+        
+        self.localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            guard let currentRecId = self.recordingSectorId else { return event }
+            
+            if let shortcut = self.parseShortcut(from: event) {
+                if let index = self.sectors.firstIndex(where: { $0.id == currentRecId }) {
+                    self.sectors[index].command = shortcut
+                }
+                self.stopRecordingShortcut()
+            }
+            
+            return nil
+        }
+    }
+    
+    private func stopRecordingShortcut() {
+        self.recordingSectorId = nil
+        if let monitor = self.localEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            self.localEventMonitor = nil
+        }
+    }
+    
+    private func parseShortcut(from event: NSEvent) -> String? {
+        var modifiers: [String] = []
+        let flags = event.modifierFlags
+        
+        if flags.contains(.command) { modifiers.append("Cmd") }
+        if flags.contains(.option) { modifiers.append("Option") }
+        if flags.contains(.shift) { modifiers.append("Shift") }
+        if flags.contains(.control) { modifiers.append("Ctrl") }
+        
+        var key = ""
+        switch event.keyCode {
+        case 123: key = "Left"
+        case 124: key = "Right"
+        case 125: key = "Down"
+        case 126: key = "Up"
+        case 53: key = "Esc"
+        case 36: key = "Enter"
+        case 49: key = "Space"
+        case 51: key = "Delete"
+        case 48: key = "Tab"
+        default:
+            if let chars = event.charactersIgnoringModifiers, !chars.isEmpty {
+                let firstChar = chars.prefix(1).lowercased()
+                key = firstChar
+            } else {
+                return nil
+            }
+        }
+        
+        if key.isEmpty { return nil }
+        
+        if modifiers.isEmpty {
+            return key.uppercased()
+        } else {
+            let modifierStr = modifiers.joined(separator: "+")
+            return "\(modifierStr)+\(key.uppercased())"
         }
     }
 
@@ -309,7 +442,7 @@ struct SettingsView: View {
     
     private func addSector() {
         let newId = (sectors.map { $0.id }.max() ?? 0) + 1
-        sectors.append(SectorConfig(id: newId, name: "New Sector", command: "echo 'hello'"))
+        sectors.append(SectorConfig(id: newId, name: "새 섹터", command: "echo 'hello'"))
     }
     
     private func deleteSector(_ id: Int) {
@@ -323,11 +456,11 @@ struct SettingsView: View {
     private func placeholderText(for type: SectorActionType) -> String {
         switch type {
         case .command:
-            return "Shell Command (e.g., open -a Terminal)"
+            return "쉘 명령 (예: open -a Terminal)"
         case .openApp:
-            return "App Name or Path (e.g., Safari or /Applications/Safari.app)"
+            return "앱 이름 또는 경로 (예: Safari 또는 /Applications/Safari.app)"
         case .shortcut:
-            return "Key Shortcut (e.g., Cmd+C, Cmd+Option+Left)"
+            return "단축키 입력 (예: Cmd+C, Cmd+Option+Left)"
         }
     }
 
@@ -389,7 +522,7 @@ public class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
-        newWindow.title = "Pie Menu Settings"
+        newWindow.title = "Pie Menu 설정"
         newWindow.contentView = NSHostingView(rootView: contentView)
         newWindow.isReleasedWhenClosed = false
         newWindow.center()
