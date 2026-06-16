@@ -289,6 +289,9 @@ struct SettingsView: View {
         .onDisappear {
             stopRecordingShortcut()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SettingsWindowWillClose"))) { _ in
+            saveChangesWithoutClosing()
+        }
     }
     
     private func selectAppFromApplicationsFolder() {
@@ -479,7 +482,7 @@ struct SettingsView: View {
         self.targetAppBundleId = ""
     }
     
-    private func saveChanges() {
+    private func saveChangesWithoutClosing() {
         // Apply global menuRadius setting
         configManager.config.menuRadius = menuRadius
         
@@ -492,7 +495,10 @@ struct SettingsView: View {
         
         // Broadcast configuration change so PieMenuPanel can update its size if needed
         NotificationCenter.default.post(name: NSNotification.Name("ConfigUpdated"), object: nil)
-        
+    }
+    
+    private func saveChanges() {
+        saveChangesWithoutClosing()
         NSSound.beep()
         SettingsWindowController.shared.close()
     }
@@ -545,6 +551,7 @@ public class SettingsWindowController {
     
     private class WindowDelegate: NSObject, NSWindowDelegate {
         func windowShouldClose(_ sender: NSWindow) -> Bool {
+            NotificationCenter.default.post(name: NSNotification.Name("SettingsWindowWillClose"), object: nil)
             sender.orderOut(nil)
             return false
         }
